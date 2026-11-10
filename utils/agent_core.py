@@ -1,85 +1,72 @@
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
+import os
+from openai import OpenAI
 from utils.vector_store import load_vector_db, auto_build_vector_db
-from utils.joycode_llm import get_joycode_llm
+from utils.config import JOYCODE_API_BASE, JOYCODE_API_KEY, JOYCODE_MODEL_NAME
 from utils.jd_search import jd_web_search
 
-# 启动时自动构建向量库（云端部署必备）
+# 启动时自动构建向量库
 auto_build_vector_db()
 
-# 加载基础组件
-llm = get_joycode_llm()
-retriever = load_vector_db()
-
-# 对话记忆
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True,
-    output_key="answer"
+# 初始化大模型客户端
+client = OpenAI(
+    base_url=JOYCODE_API_BASE,
+    api_key=JOYCODE_API_KEY
 )
 
-# 核心问答prompt
-QA_PROMPT_TEMPLATE = """
-你是专业的智慧养宠AI助手「宠智通」，请结合知识库内容与对话历史，严谨回答用户问题。
+# 加载检索器
+retriever = load_vector_db()
+
+# 全局对话记忆
+chat_history = []
+
+SYSTEM_PROMPT = """
+你是专业的智慧养宠AI助手「宠智通」，请结合参考知识库与对话历史，严谨回答用户问题。
 要求：
 1. 医疗类内容严格遵循知识库标准，分级给出建议，明确标注风险等级
 2. 所有医疗建议结尾必须标注：⚠️ 本建议仅供参考，重症请及时就医
 3. 语气专业易懂，避免晦涩术语，分点呈现核心内容
 4. 若问题超出知识库范围，如实说明并给出通用建议
-
-知识库内容：
-{context}
-
-对话历史：
-{chat_history}
-
-用户问题：{question}
-
-回答：
 """
-
-QA_PROMPT = PromptTemplate(
-    template=QA_PROMPT_TEMPLATE,
-    input_variables=["context", "chat_history", "question"]
-)
-
-# 问题浓缩prompt
-CONDENSE_PROMPT_TEMPLATE = """
-结合以下对话历史和用户的新问题，将其重新表述为一个独立的完整问题。
-对话历史：
-{chat_history}
-
-新问题：{question}
-
-独立完整问题：
-"""
-
-CONDENSE_PROMPT = PromptTemplate(
-    template=CONDENSE_PROMPT_TEMPLATE,
-    input_variables=["chat_history", "question"]
-)
-
-# 构建带记忆的对话检索问答链
-qa_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
-    retriever=retriever,
-    memory=memory,
-    condense_question_prompt=CONDENSE_PROMPT,
-    combine_docs_chain_kwargs={"prompt": QA_PROMPT},
-    return_source_documents=True,
-    verbose=False
-)
 
 
 def chat_with_agent(query: str, use_web_search: bool = False):
     """
-    智能体核心对话接口，支持开启联网搜索增强
+    智能体核心对话接口
     """
-    result = qa_chain.invoke({"question": query})
-    answer = result["answer"]
+    # 1. 检索知识库相关内容
+    docs = retriever.get_relevant_documents(query)
+    context = "\n".join([doc.page_content for doc in docs])
 
-    # 联网搜索增强
+    # 2. 拼接对话历史
+    history_text = ""
+    for msg in chat_history[-6:]:  # 保留最近6轮对话
+        history_text += f"{msg['role']}: {msg['content']}\n"
+
+    # 3. 组装最终prompt
+    final_prompt = f"""
+    {SYSTEM_PROMPT}
+
+    参考知识库内容：
+    {context}
+
+    对话历史：
+    {history_text}
+
+    用户问题：{query}
+
+    请给出回答：
+    """
+
+    # 4. 调用大模型
+    response = client.chat.completions.create(
+        model=JOYCODE_MODEL_NAME,
+        messages=[{"role": "user", "content": final_prompt}],
+        temperature=0.3,
+        max_tokens=2048
+    )
+    answer = response.choices[0].message.content
+
+    # 5. 联网搜索增强
     web_refs = []
     if use_web_search:
         web_results = jd_web_search(query)
@@ -90,7 +77,11 @@ def chat_with_agent(query: str, use_web_search: bool = False):
                 refs_text += f"{i}. {item['title']}：{item['content'][:100]}...\n"
             answer += refs_text
 
-    # 风险等级解析
+    # 6. 更新对话记忆
+    chat_history.append({"role": "user", "content": query})
+    chat_history.append({"role": "assistant", "content": answer})
+
+    # 7. 风险等级解析
     risk_level = "低风险"
     if "高风险" in answer or "立即就医" in answer:
         risk_level = "高风险"
@@ -121,8 +112,12 @@ def generate_feeding_plan(pet_type: str, breed: str, age: str, weight: str):
     
     分点清晰，语言实用易懂。
     """
-    response = llm.invoke(prompt)
-    return response.content
+    response = client.chat.completions.create(
+        model=JOYCODE_MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+    return response.choices[0].message.content
 
 
 def analyze_behavior(behavior_desc: str, pet_type: str):
@@ -134,10 +129,15 @@ def analyze_behavior(behavior_desc: str, pet_type: str):
     请分析该行为的可能成因，并给出3-4条可落地的矫正/改善方案。
     要求：先分析原因，再给解决方案，分点清晰，实操性强。
     """
-    response = llm.invoke(prompt)
-    return response.content
+    response = client.chat.completions.create(
+        model=JOYCODE_MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+    return response.choices[0].message.content
 
 
 def clear_memory():
     """清空对话记忆"""
-    memory.clear()
+    global chat_history
+    chat_history = []
