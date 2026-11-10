@@ -1,25 +1,16 @@
-from utils.vector_store import load_vector_db, auto_build_vector_db
-
-# 启动时自动构建向量库（云端部署必备）
-auto_build_vector_db()
-# 加载基础组件
-llm = get_joycode_llm()
-vector_db = load_vector_db()
-
-
-
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
-from utils.vector_store import load_vector_db
+from utils.vector_store import load_vector_db, auto_build_vector_db
 from utils.joycode_llm import get_joycode_llm
 from utils.jd_search import jd_web_search
 
+# 启动时自动构建向量库（云端部署必备）
+auto_build_vector_db()
+
 # 加载基础组件
 llm = get_joycode_llm()
-retriever = load_vector_db()  #更新
-# vector_db = load_vector_db()
-# retriever = vector_db.as_retriever(search_kwargs={"k": 4})
+retriever = load_vector_db()
 
 # 对话记忆
 memory = ConversationBufferMemory(
@@ -53,7 +44,7 @@ QA_PROMPT = PromptTemplate(
     input_variables=["context", "chat_history", "question"]
 )
 
-# 问题浓缩prompt（用于把历史对话+新问题整合成独立问题，供检索使用）
+# 问题浓缩prompt
 CONDENSE_PROMPT_TEMPLATE = """
 结合以下对话历史和用户的新问题，将其重新表述为一个独立的完整问题。
 对话历史：
@@ -85,7 +76,6 @@ def chat_with_agent(query: str, use_web_search: bool = False):
     """
     智能体核心对话接口，支持开启联网搜索增强
     """
-    # 基础检索回答
     result = qa_chain.invoke({"question": query})
     answer = result["answer"]
 
