@@ -1,7 +1,5 @@
 streamlit
-langchain
-langchain-openai
-langchain-core
+openai
 faiss-cpu
 plotly
 python-dotenv
@@ -9,3 +7,4 @@ requests
 numpy
 scikit-learn
 jieba
+langchain-core
