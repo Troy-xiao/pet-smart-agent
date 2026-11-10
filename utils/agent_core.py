@@ -7,6 +7,7 @@ llm = get_joycode_llm()
 vector_db = load_vector_db()
 
 
+
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
@@ -16,8 +17,9 @@ from utils.jd_search import jd_web_search
 
 # 加载基础组件
 llm = get_joycode_llm()
-vector_db = load_vector_db()
-retriever = vector_db.as_retriever(search_kwargs={"k": 4})
+retriever = load_vector_db()  #更新
+# vector_db = load_vector_db()
+# retriever = vector_db.as_retriever(search_kwargs={"k": 4})
 
 # 对话记忆
 memory = ConversationBufferMemory(
