@@ -6,7 +6,7 @@ load_dotenv()
 # JoyCode大模型配置
 JOYCODE_API_BASE = os.getenv("JOYCODE_API_BASE")
 JOYCODE_API_KEY = os.getenv("JOYCODE_API_KEY")
-JOYCODE_MODEL_NAME = os.getenv("JOYCODE_MODEL_NAME", "glm-4-flash")
+JOYCODE_MODEL_NAME = os.getenv("JOYCODE_MODEL_NAME", "GLM-5.1")
 
 # 京东云智能搜索配置
 JD_SEARCH_API_KEY = os.getenv("JD_SEARCH_API_KEY")
