@@ -9,7 +9,3 @@ scikit-learn
 jieba
 langchain-core
 
-streamlit-mic-recorder
-librosa
-soundfile
-numpy
