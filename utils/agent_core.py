@@ -1,4 +1,3 @@
-import os
 from openai import OpenAI
 from utils.vector_store import load_vector_db, auto_build_vector_db
 from utils.config import JOYCODE_API_BASE, JOYCODE_API_KEY, JOYCODE_MODEL_NAME
@@ -16,9 +15,6 @@ client = OpenAI(
 # 加载检索器
 retriever = load_vector_db()
 
-# 全局对话记忆
-chat_history = []
-
 SYSTEM_PROMPT = """
 你是专业的智慧养宠AI助手「宠智通」，请结合参考知识库与对话历史，严谨回答用户问题。
 要求：
@@ -29,9 +25,12 @@ SYSTEM_PROMPT = """
 """
 
 
-def chat_with_agent(query: str, use_web_search: bool = False):
+def chat_with_agent(query: str, chat_history: list, use_web_search: bool = False):
     """
     智能体核心对话接口
+    :param query: 用户当前问题
+    :param chat_history: 对话历史列表，格式[{"role":"user/assistant", "content":"xxx"}]
+    :param use_web_search: 是否开启联网搜索增强
     """
     # 1. 检索知识库相关内容
     docs = retriever.get_relevant_documents(query)
@@ -77,11 +76,7 @@ def chat_with_agent(query: str, use_web_search: bool = False):
                 refs_text += f"{i}. {item['title']}：{item['content'][:100]}...\n"
             answer += refs_text
 
-    # 6. 更新对话记忆
-    chat_history.append({"role": "user", "content": query})
-    chat_history.append({"role": "assistant", "content": answer})
-
-    # 7. 风险等级解析
+    # 6. 风险等级解析
     risk_level = "低风险"
     if "高风险" in answer or "立即就医" in answer:
         risk_level = "高风险"
@@ -135,9 +130,3 @@ def analyze_behavior(behavior_desc: str, pet_type: str):
         temperature=0.3
     )
     return response.choices[0].message.content
-
-
-def clear_memory():
-    """清空对话记忆"""
-    global chat_history
-    chat_history = []
